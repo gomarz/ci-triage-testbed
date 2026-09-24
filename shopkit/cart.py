@@ -13,10 +13,10 @@ class Cart:
     def __init__(self) -> None:
         self._lines: list[Line] = []
 
-    def add(self, sku: str, unit_price: Decimal, qty: int = 1) -> None:
-        if qty < 1:
+    def add(self, line: Line) -> None:
+        if line.qty < 1:
             raise ValueError("qty must be at least 1")
-        self._lines.append(Line(sku, unit_price, qty))
+        self._lines.append(line)
 
     @property
     def lines(self) -> tuple[Line, ...]:
