@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-FREE_SHIPPING_MIN = Decimal("50.00")
+FREE_SHIPPING_MIN = Decimal("75.00")
 FLAT_RATE = Decimal("4.99")
 
 
