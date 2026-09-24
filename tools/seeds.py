@@ -40,6 +40,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 SEEDS = ROOT / "seeds"
 
+TRAILER = "Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
+
 #: Each CI step is "- name: X" then "run: CMD" on the next line. Steps that only
 #: `uses:` an action have no command here and are covered by the venv.
 _STEP = re.compile(r"- name: (?P<name>.+)\n\s+run: (?P<cmd>.+)")
@@ -224,7 +226,7 @@ def cmd_branch(args: argparse.Namespace) -> int:
             git("apply", "--whitespace=nowarn", str(SEEDS / seed["id"] / "inject.patch"))
             git("rm", "-rq", "seeds")
             git("add", "-A")
-            git("commit", "-q", "-m", seed["commit_message"])
+            git("commit", "-q", "-m", seed["commit_message"], "-m", TRAILER)
             print(f"created {branch}")
             git("switch", "-q", args.ref)
     finally:
