@@ -1,7 +1,7 @@
 # ci-triage-testbed
 
 A small pricing library (`shopkit`) that exists to be broken on purpose. It is
-the verification target for [ci-triage-agent](../files%20(4)): a repo we can push
+the verification target for [ci-triage-agent](https://github.com/gomarz/ci-triage-agent): a repo we can push
 to, with a fast suite (17 tests, under a second) and failures whose correct fix
 is known.
 
