@@ -22,5 +22,8 @@ class Cart:
     def lines(self) -> tuple[Line, ...]:
         return tuple(self._lines)
 
+    def unique_skus(self) -> list[str]:
+        return list({line.sku for line in self._lines})
+
     def subtotal(self) -> Decimal:
         return sum((line.unit_price * line.qty for line in self._lines), Decimal("0"))
