@@ -341,7 +341,9 @@ def cmd_ci(args: argparse.Namespace) -> int:
 
 def cmd_try(args: argparse.Namespace) -> int:
     [seed] = load([args.seed])
-    result = evaluate(seed, args.patch, ref=args.ref, runs=args.runs)
+    # git apply runs inside the temp tree, so a relative path would be resolved there.
+    patch = args.patch.resolve() if args.patch else None
+    result = evaluate(seed, patch, ref=args.ref, runs=args.runs)
     print(json.dumps(result))
     return 0
 
