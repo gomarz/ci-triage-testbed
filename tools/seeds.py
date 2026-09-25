@@ -243,9 +243,11 @@ def evaluate(seed: dict, patch: Path | None, *, ref: str = "main", runs: int = 1
                 return {"applied": False, "error": exc.stderr.strip()[:500]}
 
         env = make_venv(tmp / "venv")
+        # Not pinned, unlike verify_seed: on a real runner every process draws its
+        # own hash seed, and a retry chain only works because of that.
+        env.pop("PYTHONHASHSEED", None)
         results = []
         for i in range(runs if flaky else 1):
-            env["PYTHONHASHSEED"] = str(i)
             results.append(run_ci(tree, env, skip_install=i > 0))
         passed = sum(r.passed for r in results)
         # Report a failing run if there was one, so the counts show what went wrong.
