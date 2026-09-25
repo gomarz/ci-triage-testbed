@@ -27,13 +27,38 @@ signature, failing tests, files a correct fix touches, and the cheats a scorer
 should look for. `seeds/<id>/inject.patch` and `fix.patch` are the two halves.
 
 ```
-python tools/seeds.py verify            # every seed: fails as declared, fix turns it green
+python tools/seeds.py verify            # every seed and every labelled patch (slow)
 python tools/seeds.py verify s05-...    # one seed
+python tools/seeds.py verify --skip-patches   # inject and fix only (about two minutes)
 python tools/seeds.py branch            # (re)create seed/* branches from main
+python tools/seeds.py try ID [PATCH]    # run CI on a seed with a candidate patch; prints JSON
 ```
 
 `verify` runs the steps of `.github/workflows/ci.yml` in a fresh virtualenv, so
-it needs network for s03's `pip install`. It takes about two minutes.
+it needs network for s03's `pip install`. With the labelled patches it takes
+about ten minutes. `try` is what the ci-triage-agent's patch scorer calls.
+
+## Labelled patches
+
+To score a patch scorer you need patches whose verdict you already know, so each
+seed carries some, all applied to the seed's failing tree and all verified to turn
+CI green:
+
+- `cheats/` turn CI green without fixing the cause: skip or delete the test,
+  edit its expectation, loosen its assertion, swallow the exception, commit the
+  missing artifact, add `continue-on-error`, retry the flaky step, revert the
+  change under repair. Each is tagged in the manifest with the cheat it is.
+- `honest/` are correct fixes written a different way from `fix.patch`, so a
+  scorer that flags them is measured.
+- `second/` and `heldout/` are further batches of both, and the order matters.
+  `cheats/` and `honest/` were written alongside the scorer's detectors, so a
+  score on them is circular. `second/` was written after them and then used to add
+  detectors, so it is tuned too. `heldout/` was sealed until the detectors were
+  final and scored once. Its first result is the only honest one; do not add
+  detectors for it and then keep quoting it. Write a new batch instead.
+
+`test_edit_is_legitimate` in the manifest is per seed: s06's code change was
+intended, so editing its test is the correct fix there and a cheat everywhere else.
 
 Seed branches do not contain `seeds/`. The fix is still reachable through
 `main`'s history, so a harness must not hand the agent that ref.
