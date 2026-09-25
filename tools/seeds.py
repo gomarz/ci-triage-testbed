@@ -3,6 +3,8 @@
     python tools/seeds.py verify [ID ...]   check each seed against its manifest entry
     python tools/seeds.py branch [ID ...]   create seed/ID branches from main
     python tools/seeds.py try ID [PATCH]    run CI on seed ID with PATCH applied; prints JSON
+    python tools/seeds.py export ID DEST    the failing tree as a fresh git repo, no seeds/, no history
+    python tools/seeds.py ci DIR --venv V   run the workflow in DIR; prints JSON
 
 `verify` is what makes the manifest ground truth rather than a claim. For each
 seed it checks out main into a scratch directory, applies inject.patch, and
@@ -95,7 +97,8 @@ def workflow_steps(tree: Path) -> list[tuple[str, str, bool]]:
 
 
 def make_venv(where: Path) -> dict[str, str]:
-    venv.create(where, with_pip=True)
+    if not where.exists():
+        venv.create(where, with_pip=True)
     bindir = where / ("Scripts" if os.name == "nt" else "bin")
     env = dict(os.environ)
     env["PATH"] = f"{bindir}{os.pathsep}{env['PATH']}"
@@ -220,6 +223,18 @@ def verify_seed(seed: dict, baseline_ref: str, flake_runs: int) -> list[str]:
     return problems
 
 
+def build_failing_tree(seed: dict, ref: str, dest: Path) -> None:
+    """The seed's failing tree, as a seed branch has it: main plus inject.patch, no seeds/.
+
+    One function for everything that needs the tree (try, export), so a diff made in
+    an exported workspace applies to the tree try builds, byte for byte.
+    """
+    dest.mkdir(parents=True, exist_ok=True)
+    checkout_tree(ref, dest)
+    apply_patch(dest, SEEDS / seed["id"] / "inject.patch")
+    shutil.rmtree(dest / "seeds")
+
+
 def evaluate(seed: dict, patch: Path | None, *, ref: str = "main", runs: int = 12) -> dict:
     """Apply `patch` to the seed's failing tree and run CI, as a candidate fix would be.
 
@@ -232,10 +247,7 @@ def evaluate(seed: dict, patch: Path | None, *, ref: str = "main", runs: int = 1
     with tempfile.TemporaryDirectory(prefix=f"try-{seed['id']}-") as tmp:
         tmp = Path(tmp)
         tree = tmp / "tree"
-        tree.mkdir()
-        checkout_tree(ref, tree)
-        apply_patch(tree, SEEDS / seed["id"] / "inject.patch")
-        shutil.rmtree(tree / "seeds")
+        build_failing_tree(seed, ref, tree)
         if patch is not None:
             try:
                 apply_patch(tree, patch)
@@ -280,6 +292,51 @@ def verify_patches(seed: dict, runs: int) -> list[str]:
         else:
             print(f"    {file:<34} {kind:<28} green ({result['runs_passed']}/{result['runs']})")
     return problems
+
+
+def cmd_export(args: argparse.Namespace) -> int:
+    """Write the failing tree to DEST as a fresh git repo with one baseline commit.
+
+    A fresh repo, not a clone: main's history holds fix.patch and every labelled
+    cheat, so nothing here may be able to reach it.
+    """
+    [seed] = load([args.seed])
+    dest = args.dest.resolve()
+    if dest.exists() and any(dest.iterdir()):
+        sys.exit(f"{dest} is not empty")
+    build_failing_tree(seed, args.ref, dest)
+    # tools/ and the README are the harness's, and they say what the seeds and the
+    # cheats are. An agent that reads them is answering the test, not the failure.
+    shutil.rmtree(dest / "tools")
+    (dest / "README.md").unlink()
+    (dest / ".gitattributes").write_text("* text=auto eol=lf\n", encoding="utf-8", newline="\n")
+    for cmd in (
+        ["init", "-q", "-b", "main"],
+        ["config", "user.name", "workspace"],
+        ["config", "user.email", "workspace@localhost"],
+        ["config", "core.autocrlf", "false"],
+        ["add", "-A"],
+        ["commit", "-q", "-m", "baseline"],
+    ):
+        subprocess.run(["git", *cmd], cwd=dest, check=True, capture_output=True, text=True)
+    print(json.dumps({"workspace": str(dest), "seed": seed["id"]}))
+    return 0
+
+
+def cmd_ci(args: argparse.Namespace) -> int:
+    """Run the workflow's steps in DIR, reusing VENV, and print JSON with the log tail.
+
+    For an agent iterating on a workspace, so the venv is built once. PYTHONHASHSEED is
+    left unpinned, as in try: on a real runner every process draws its own.
+    """
+    env = make_venv(args.venv)
+    env.pop("PYTHONHASHSEED", None)
+    run = run_ci(args.dir.resolve(), env, skip_install=args.skip_install)
+    print(json.dumps({
+        "passed": run.passed, "failed_step": run.failed_step, **parse_counts(run.output),
+        "log_tail": run.output[-args.tail:],
+    }))
+    return 0
 
 
 def cmd_try(args: argparse.Namespace) -> int:
@@ -350,6 +407,17 @@ def main() -> int:
     p.add_argument("--ref", default="main")
     p.add_argument("--runs", type=int, default=12, help="runs for a flaky seed")
     p.set_defaults(fn=cmd_try)
+    p = sub.add_parser("export", help="write a seed's failing tree to a fresh git repo")
+    p.add_argument("seed")
+    p.add_argument("dest", type=Path)
+    p.add_argument("--ref", default="main")
+    p.set_defaults(fn=cmd_export)
+    p = sub.add_parser("ci", help="run the workflow's steps in a directory; prints JSON")
+    p.add_argument("dir", type=Path)
+    p.add_argument("--venv", type=Path, required=True)
+    p.add_argument("--skip-install", action="store_true")
+    p.add_argument("--tail", type=int, default=6000)
+    p.set_defaults(fn=cmd_ci)
     args = parser.parse_args()
     return args.fn(args)
 
