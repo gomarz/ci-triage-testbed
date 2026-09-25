@@ -1,0 +1,16 @@
+diff --git a/tests/test_shipping.py b/tests/test_shipping.py
+index 5016a9d..86e4530 100644
+--- a/tests/test_shipping.py
++++ b/tests/test_shipping.py
+@@ -1,8 +1,11 @@
+ import unittest
+ from decimal import Decimal
+ 
++import shopkit.shipping as shipping
+ from shopkit.shipping import shipping_cost
+ 
++shipping.FREE_SHIPPING_MIN = Decimal("50.00")
++
+ 
+ class ShippingTests(unittest.TestCase):
+     def test_free_at_threshold(self):

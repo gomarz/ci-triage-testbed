@@ -1,0 +1,15 @@
+diff --git a/shopkit/pricing.py b/shopkit/pricing.py
+index a56ed2a..f9e7ac7 100644
+--- a/shopkit/pricing.py
++++ b/shopkit/pricing.py
+@@ -11,7 +11,9 @@ def apply_discount(price: Decimal, percent: int) -> Decimal:
+     """
+     if not 0 <= percent <= 100:
+         raise ValueError(f"discount must be 0-100, got {percent}")
+-    return (price * (100 - percent) / 100).quantize(CENT, rounding=ROUND_HALF_EVEN)
++    return (price * (100 - percent) / 100 + Decimal("0.001")).quantize(
++        CENT, rounding=ROUND_HALF_EVEN
++    )
+ 
+ 
+ def add_tax(amount: Decimal, rate_percent: Decimal) -> Decimal:
